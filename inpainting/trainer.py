@@ -3,68 +3,92 @@ Simple training loop; Boilerplate that could apply to any arbitrary neural netwo
 so nothing in this file really has anything to do with GPT specifically.
 """
 
-from collections import defaultdict
-
 import torch
 from torch.utils.data.dataloader import DataLoader
+from transformers import TrainerCallback
+from transformers.optimization import get_linear_schedule_with_warmup
+from dataclasses import dataclass, field
+from torch.utils.data import Dataset
+
+from .callbacks import TrainingMonitor
 
 
+@dataclass
+class State:
+    log_history: list = field(default_factory=list)
+    logging_steps: int = 0
+    epoch: int = 0
+
+
+@dataclass
 class Trainer:
-	def __init__(self, model, dataset):
-		self.dataset = dataset
-		# self.callbacks = defaultdict(list)
-		self.device = "cuda" if torch.cuda.is_available() else "cpu"
-		self.model = model.to(self.device)
-		print("running on device", self.device)
+    model: torch.nn.Module
+    dataset: Dataset
+    logging_steps: int = 10
+    callbacks: list[TrainerCallback] = field(default_factory=lambda: [TrainingMonitor])
 
-	def train(
-		self,
-		epochs=1,
-		lr=3e-4,
-		weight_decay=0.1,
-		batch_size=64,
-		workers=4,
-		shuffle=True,
-	):
-		model = self.model
+    def __post_init__(self):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.state = State(logging_steps=self.logging_steps)
 
-		# setup the optimizer
-		optimizer = torch.optim.Adam(
-			model.parameters(), lr=lr, weight_decay=weight_decay
-		)
+        # Instantiate callbacks if they are not already instances
+        self.callbacks = [
+            callback() if isinstance(callback, type) else callback
+            for callback in self.callbacks
+        ]
+        print("running on device", self.device)
 
-		# setup the dataloader
-		loader = DataLoader(
-			self.dataset,
-			# sampler=torch.utils.data.RandomSampler(
-			# 	self.dataset, replacement=True, num_samples=int(1e10)
-			# ),
-			shuffle=shuffle,
-			pin_memory=True,
-			batch_size=batch_size,
-			num_workers=workers,
-		)
+    def train(
+        self,
+        epochs=1,
+        lr=3e-4,
+        weight_decay=0.1,
+        batch_size=64,
+        workers=4,
+        shuffle=True,
+        warmup_steps=0,
+    ):
+        model = self.model.to(self.device)
+        model.device = self.device
 
-		model.train()
-		for e in range(epochs):
-			for x, y in iter(loader):
-				x, y = x.to(self.device), y.to(self.device)
-				# mask = x != y
-				# logits = model(x)[mask]
-				# targets = y[mask]
+        # setup the optimizer
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=lr, weight_decay=weight_decay
+        )
 
-				logits = model(x)
-				b, n, p = logits.shape
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer=optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=epochs * len(self.dataset) // batch_size
+        )
 
-				# print(logits.shape)
-				# print(y.shape)
+        # setup the dataloader
+        loader = DataLoader(
+            self.dataset,
+            shuffle=shuffle,
+            pin_memory=True,
+            batch_size=batch_size,
+            num_workers=workers,
+        )
 
-				logits = logits.view(b*n, p)
-				targets = y.flatten()
-				
-				loss = torch.nn.functional.cross_entropy(logits, targets)
-				loss.backward()
-				optimizer.step()
-				model.zero_grad()
+        model.train()
+        for self.state.epoch in range(epochs):
+            for batch in iter(loader):
+                batch = {k: v.to(self.device) for k, v in batch.items()}
 
-			print(f"Epoch: {e:<10}\t\tLoss: {loss.item()}")
+                outputs = model(**batch)
+
+                outputs.loss.backward()
+                optimizer.step()
+                scheduler.step()
+                model.zero_grad()
+
+                for callback in self.callbacks:
+                    callback.on_step_end(
+                        args=None,
+                        state=self.state,
+                        control=None,
+                        model=model,
+                        train_dataloader=loader,
+                        lr_scheduler=scheduler,
+                    )

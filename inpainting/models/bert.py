@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from transformers.modeling_outputs import MaskedLMOutput
 from .components import Embeddings, MultiHeadSelfAttention
 
 
@@ -46,9 +47,16 @@ class BERT(nn.Module):
             ]
         )
 
-    def forward(self, input_ids, mask=None):
+    def forward(self, input_ids, labels=None, mask=None) -> MaskedLMOutput:
         x = self.embed(input_ids)
         for layer in self.layers:
             x = layer(x, x, x, mask=mask)
-        return x
-        # return torch.softmax(x, dim=-1)
+
+        loss = None
+        if labels is not None:
+            b, n, p = x.shape
+            logits = x.view(b * n, p)
+            targets = labels.flatten()
+            loss = torch.nn.functional.cross_entropy(logits, targets)
+        
+        return MaskedLMOutput(loss=loss, logits=x)
