@@ -36,9 +36,10 @@ class TransformerBlock(nn.Module):
 # BERT Model
 class BERT(nn.Module):
     def __init__(
-        self, vocab_size, embed_size, num_layers, num_heads, ff_hidden, max_len, dropout
+        self, vocab_size, embed_size, num_layers, num_heads, ff_hidden, max_len, dropout, ce_weights=None
     ):
         super().__init__()
+        self.ce_weights = torch.nn.Parameter(torch.Tensor(ce_weights), requires_grad=False)
         self.embed = Embeddings(vocab_size, embed_size, max_len)
         self.layers = nn.ModuleList(
             [
@@ -57,6 +58,6 @@ class BERT(nn.Module):
             b, n, p = x.shape
             logits = x.view(b * n, p)
             targets = labels.flatten()
-            loss = torch.nn.functional.cross_entropy(logits, targets)
+            loss = torch.nn.functional.cross_entropy(logits, targets, weight=self.ce_weights)
         
         return MaskedLMOutput(loss=loss, logits=x)
