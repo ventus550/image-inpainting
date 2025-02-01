@@ -27,3 +27,8 @@ Run the following command in the root of the project directory:
 ```bash
 poetry install
 ```
+
+# Directions
+- Spatial embeddings
+- Discriminator
+- Hyperparameter Testing
