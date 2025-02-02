@@ -63,11 +63,13 @@ class BERT(nn.Module):
                 for _ in range(num_layers)
             ]
         )
+        self.classifier = nn.Linear(embed_size, vocab_size)
 
     def forward(self, input_ids, labels=None, mask=None) -> MaskedLMOutput:
         x = self.embed(input_ids)
         for layer in self.layers:
             x = layer(x, x, x, mask=mask)
+        x = self.classifier(x)
 
         loss = None
         if labels is not None:

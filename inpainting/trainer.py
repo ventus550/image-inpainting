@@ -92,3 +92,4 @@ class Trainer:
                         train_dataloader=loader,
                         lr_scheduler=scheduler,
                     )
+        model.eval()

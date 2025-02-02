@@ -101,7 +101,7 @@ class PatchedImageDataset(Dataset):
 
 
 class MNIST(PatchedImageDataset):
-    def __init__(self, clusters=400, frac=1.0, train=True, embeddings=False):
+    def __init__(self, clusters=400, frac=1.0, train=True, embeddings=False, unimask=False):
         data = torchvision.datasets.MNIST("./data", train=train, download=True).data
         size = int(min(len(data) * frac, len(data)))
         super().__init__(
@@ -109,4 +109,5 @@ class MNIST(PatchedImageDataset):
             clusters=clusters,
             shape=4,
             embeddings=embeddings,
+            unimask=unimask,
         )
