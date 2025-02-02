@@ -56,23 +56,13 @@ class PatchedImageDataset(Dataset):
             q = torch.from_numpy(self.euclideans[p]).float()
             mask = torch.zeros_like(q[0])
 
-        if not self.unimask:
-            mask_positions = torch.rand(p.shape) < self.dropout
-            q[mask_positions] = mask
+        if self.unimask:
+            num_to_mask = max(1, round(self.dropout * len(p)))  # Ensure at least 1 token is masked
+            mask_positions = torch.randperm(len(p))[:num_to_mask] 
         else:
-            unique_tokens = torch.unique(p)
-            num_tokens_to_mask = int(self.dropout * len(unique_tokens))
-            tokens_to_mask = unique_tokens[
-                torch.randperm(len(unique_tokens))[:num_tokens_to_mask]
-            ]
-            for token in tokens_to_mask:
-                token_positions = (p == token).nonzero(as_tuple=True)[0]
-                if len(token_positions) > 0:
-                    mask_position = token_positions[
-                        torch.randint(0, len(token_positions), (1,))
-                    ]
-                    q[mask_position] = mask
-
+            mask_positions = torch.rand(p.shape) < self.dropout
+        
+        q[mask_positions] = mask
         return dict(input_ids=q, labels=p)
 
     def plot_sample(self, patches, shape=None, scale=1):
@@ -101,13 +91,14 @@ class PatchedImageDataset(Dataset):
 
 
 class MNIST(PatchedImageDataset):
-    def __init__(self, clusters=400, frac=1.0, train=True, embeddings=False, unimask=False):
+    def __init__(self, clusters=400, frac=1.0, train=True, embeddings=False, unimask=False, shape=2):
         data = torchvision.datasets.MNIST("./data", train=train, download=True).data
         size = int(min(len(data) * frac, len(data)))
+        self.shape = shape 
         super().__init__(
             data=data[:size][:, :, :, None],
             clusters=clusters,
-            shape=4,
+            shape=shape,
             embeddings=embeddings,
             unimask=unimask,
         )
