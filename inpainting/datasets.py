@@ -2,6 +2,7 @@ import numpy
 import torch
 import torchvision
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import cdist
 from patchify import patchify
 from torch.utils.data import Dataset
 from sklearn.cluster import KMeans
@@ -22,6 +23,7 @@ class PatchedImageDataset(Dataset):
     shape: int
     dropout: float = 0.15
     unimask: bool = True
+    embeddings: bool = False
 
     def __post_init__(self):
         patches = numpy.vstack([patchslice(x, shape=self.shape) for x in self.data])
@@ -31,8 +33,14 @@ class PatchedImageDataset(Dataset):
         self.mask_id = self.clusters
         self.tokens = self.clusters + 1  # normal tokens + mask token
 
-        _, counts = numpy.unique([*self.ptoi(patches), self.mask_id], return_counts=True)
+        _, counts = numpy.unique(
+            [*self.ptoi(patches), self.mask_id], return_counts=True
+        )
         self.distribution = counts / len(patches)
+
+        centroids = self.itop(numpy.arange(self.clusters))
+        centroids = numpy.vstack([centroids, numpy.zeros_like(centroids[0])])
+        self.euclideans = cdist(centroids, centroids)
 
     def __len__(self):
         return len(self.data)
@@ -40,12 +48,17 @@ class PatchedImageDataset(Dataset):
     def __getitem__(self, idx):
         x = self.data[idx]
         p = self.ptoi(patchslice(x, shape=self.shape))
+        mask = self.mask_id
         p = torch.from_numpy(p).long()
         q = p.clone()
 
+        if self.embeddings:
+            q = torch.from_numpy(self.euclideans[p]).float()
+            mask = torch.zeros_like(q[0])
+
         if not self.unimask:
-            mask = torch.rand(p.shape) < self.dropout
-            q[mask] = self.mask_id
+            mask_positions = torch.rand(p.shape) < self.dropout
+            q[mask_positions] = mask
         else:
             unique_tokens = torch.unique(p)
             num_tokens_to_mask = int(self.dropout * len(unique_tokens))
@@ -58,7 +71,7 @@ class PatchedImageDataset(Dataset):
                     mask_position = token_positions[
                         torch.randint(0, len(token_positions), (1,))
                     ]
-                    q[mask_position] = self.mask_id
+                    q[mask_position] = mask
 
         return dict(input_ids=q, labels=p)
 
@@ -88,7 +101,12 @@ class PatchedImageDataset(Dataset):
 
 
 class MNIST(PatchedImageDataset):
-    def __init__(self, clusters=400, frac=1.0, train=True):
+    def __init__(self, clusters=400, frac=1.0, train=True, embeddings=False):
         data = torchvision.datasets.MNIST("./data", train=train, download=True).data
         size = int(min(len(data) * frac, len(data)))
-        super().__init__(data=data[:size][:, :, :, None], clusters=clusters, shape=4)
+        super().__init__(
+            data=data[:size][:, :, :, None],
+            clusters=clusters,
+            shape=4,
+            embeddings=embeddings,
+        )
