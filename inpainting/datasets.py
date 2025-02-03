@@ -33,9 +33,7 @@ class PatchedImageDataset(Dataset):
         self.mask_id = self.clusters
         self.tokens = self.clusters + 1  # normal tokens + mask token
 
-        _, counts = numpy.unique(
-            [*self.ptoi(patches), self.mask_id], return_counts=True
-        )
+        _, counts = numpy.unique(self.ptoi(patches), return_counts=True)
         self.distribution = counts / len(patches)
 
         centroids = self.itop(numpy.arange(self.clusters))

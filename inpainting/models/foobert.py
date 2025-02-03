@@ -69,7 +69,7 @@ class FOOBERT(nn.Module):
             x = layer(x, x, x, mask=mask)
         x = self.classifier(x)
         
-        probs = torch.softmax(x, dim=1)
+        probs = torch.softmax(x, dim=-1)
         patches = probs @ self.patches
 
  
