@@ -3,7 +3,7 @@ import torch
 import torchvision
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
-from patchify import patchify
+from patchify import patchify, unpatchify
 from torch.utils.data import Dataset
 from sklearn.cluster import KMeans
 
@@ -19,6 +19,7 @@ def patchslice(img, shape):
 @dataclass
 class PatchedImageDataset(Dataset):
     data: numpy.typing.NDArray[float]
+    targets: numpy.typing.NDArray[float]
     clusters: int
     shape: int
     dropout: float = 0.15
@@ -50,6 +51,8 @@ class PatchedImageDataset(Dataset):
         p = torch.from_numpy(p).long()
         q = p.clone()
 
+        number = self.targets[idx]
+
         if self.embeddings:
             q = torch.from_numpy(self.euclideans[p]).float()
             mask = torch.zeros_like(q[0])
@@ -61,7 +64,7 @@ class PatchedImageDataset(Dataset):
             mask_positions = torch.rand(p.shape) < self.dropout
         
         q[mask_positions] = mask
-        return dict(input_ids=q, labels=p)
+        return dict(input_ids=q, labels=p, number=number)
 
     def plot_sample(self, patches, shape=None, scale=1):
         shape = shape or self.data.shape[1] // self.shape
@@ -87,14 +90,49 @@ class PatchedImageDataset(Dataset):
                         cmap="binary_r",
                     )
 
+    def restore_image_from_patch_indices(self, patch_indices):
+        patches_per_row = self.data.shape[1] // self.shape
+        reconstructed_image = numpy.zeros(self.data[0].shape)
+
+        patches = self.itop(patch_indices.tolist())[0]
+
+        for i, patch in enumerate(patches):
+            row, col = divmod(i, patches_per_row)
+            patch = patch.reshape((self.shape, self.shape, 1))
+
+            y_start, y_end = row * self.shape, (row + 1) * self.shape
+            x_start, x_end = col * self.shape, (col + 1) * self.shape
+
+            reconstructed_image[y_start:y_end, x_start:x_end, :] = patch
+
+        return reconstructed_image
+    
+    def restore_image_from_patches(self, patches):
+        patches_per_row = self.data.shape[1] // self.shape
+        reconstructed_image = numpy.zeros(self.data[0].shape)
+
+        for i, patch in enumerate(patches):
+            row, col = divmod(i, patches_per_row)
+            patch = patch.reshape((self.shape, self.shape, 1))
+
+            y_start, y_end = row * self.shape, (row + 1) * self.shape
+            x_start, x_end = col * self.shape, (col + 1) * self.shape
+
+            reconstructed_image[y_start:y_end, x_start:x_end, :] = patch
+
+        return reconstructed_image
+
 
 class MNIST(PatchedImageDataset):
     def __init__(self, clusters=400, frac=1.0, train=True, embeddings=False, unimask=False, shape=2):
-        data = torchvision.datasets.MNIST("./data", train=train, download=True).data
+        full_data = torchvision.datasets.MNIST("./data", train=train, download=True)
+        data = full_data.data
+        targets = full_data.targets
         size = int(min(len(data) * frac, len(data)))
         self.shape = shape 
         super().__init__(
             data=data[:size][:, :, :, None],
+            targets=targets[:size],
             clusters=clusters,
             shape=shape,
             embeddings=embeddings,
