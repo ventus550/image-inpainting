@@ -10,7 +10,7 @@ from transformers.optimization import get_linear_schedule_with_warmup
 from dataclasses import dataclass, field
 from torch.utils.data import Dataset
 
-from .callbacks import TrainingMonitor
+from .callbacks import TrainingMonitor, OracleEstimator
 
 
 @dataclass
@@ -25,12 +25,11 @@ class Trainer:
     model: torch.nn.Module
     dataset: Dataset
     logging_steps: int = 10
-    callbacks: list[TrainerCallback] = field(default_factory=lambda: [TrainingMonitor])
+    callbacks: list[TrainerCallback] = field(default_factory=lambda: [TrainingMonitor, OracleEstimator])
 
     def __post_init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.state = State(logging_steps=self.logging_steps)
-
         # Instantiate callbacks if they are not already instances
         self.callbacks = [
             callback() if isinstance(callback, type) else callback
@@ -75,6 +74,7 @@ class Trainer:
         for self.state.epoch in range(epochs):
             for batch in iter(loader):
                 batch = {k: v.to(self.device) for k, v in batch.items()}
+                del batch["number"]
 
                 outputs = model(**batch)
 
