@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from torch.utils.data import Dataset
 from tensorflow.keras.models import Sequential
 
-from .callbacks import TrainingMonitor
+from .callbacks import TrainingMonitor, OracleEstimator
 
 
 @dataclass
@@ -27,7 +27,7 @@ class Trainer:
     dataset: Dataset
     oracle: Sequential
     logging_steps: int = 10
-    callbacks: list[TrainerCallback] = field(default_factory=lambda: [TrainingMonitor])
+    callbacks: list[TrainerCallback] = field(default_factory=lambda: [TrainingMonitor, OracleEstimator])
 
     def __post_init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

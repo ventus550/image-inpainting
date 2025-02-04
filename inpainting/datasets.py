@@ -94,7 +94,7 @@ class PatchedImageDataset(Dataset):
         patches_per_row = self.data.shape[1] // self.shape
         reconstructed_image = numpy.zeros(self.data[0].shape)
 
-        patches = self.itop(patch_indices.tolist())[0]
+        patches = self.itop(patch_indices.tolist())
 
         for i, patch in enumerate(patches):
             row, col = divmod(i, patches_per_row)
