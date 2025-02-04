@@ -83,3 +83,12 @@ class FOOBERT(nn.Module):
             loss = nn.MSELoss()(logits, targets)
 
         return MaskedLMOutput(loss=loss, logits=x)
+
+    def save(self, path: str):
+        from pathlib import Path
+        save_path = Path(path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), save_path)
+
+    def load(self, path: str):
+        self.load_state_dict(torch.load(path))
