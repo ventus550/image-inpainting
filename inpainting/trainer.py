@@ -9,7 +9,6 @@ from transformers import TrainerCallback
 from transformers.optimization import get_linear_schedule_with_warmup
 from dataclasses import dataclass, field
 from torch.utils.data import Dataset
-from tensorflow.keras.models import Sequential
 
 from .callbacks import TrainingMonitor, OracleEstimator
 
@@ -25,7 +24,6 @@ class State:
 class Trainer:
     model: torch.nn.Module
     dataset: Dataset
-    oracle: Sequential
     logging_steps: int = 10
     callbacks: list[TrainerCallback] = field(default_factory=lambda: [TrainingMonitor, OracleEstimator])
 
@@ -75,7 +73,8 @@ class Trainer:
         model.train()
         for self.state.epoch in range(epochs):
             for batch in iter(loader):
-                batch = {k: v.to(self.device) for k, v in batch.items() if k != "number"}
+                batch = {k: v.to(self.device) for k, v in batch.items()}
+                del batch["number"]
 
                 outputs = model(**batch)
 
@@ -92,6 +91,5 @@ class Trainer:
                         model=model,
                         train_dataloader=loader,
                         lr_scheduler=scheduler,
-                        oracle=self.oracle,
                     )
         model.eval()

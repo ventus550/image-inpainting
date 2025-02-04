@@ -91,21 +91,9 @@ class PatchedImageDataset(Dataset):
                     )
 
     def restore_image_from_patch_indices(self, patch_indices):
-        patches_per_row = self.data.shape[1] // self.shape
-        reconstructed_image = numpy.zeros(self.data[0].shape)
-
         patches = self.itop(patch_indices.tolist())
 
-        for i, patch in enumerate(patches):
-            row, col = divmod(i, patches_per_row)
-            patch = patch.reshape((self.shape, self.shape, 1))
-
-            y_start, y_end = row * self.shape, (row + 1) * self.shape
-            x_start, x_end = col * self.shape, (col + 1) * self.shape
-
-            reconstructed_image[y_start:y_end, x_start:x_end, :] = patch
-
-        return reconstructed_image
+        return self.restore_image_from_patches(patches)
     
     def restore_image_from_patches(self, patches):
         patches_per_row = self.data.shape[1] // self.shape
@@ -126,13 +114,11 @@ class PatchedImageDataset(Dataset):
 class MNIST(PatchedImageDataset):
     def __init__(self, clusters=400, frac=1.0, train=True, embeddings=False, unimask=False, shape=2):
         full_data = torchvision.datasets.MNIST("./data", train=train, download=True)
-        data = full_data.data
-        targets = full_data.targets
-        size = int(min(len(data) * frac, len(data)))
+        size = int(min(len(full_data.data) * frac, len(full_data.data)))
         self.shape = shape 
         super().__init__(
-            data=data[:size][:, :, :, None],
-            targets=targets[:size],
+            data=full_data.data[:size][:, :, :, None],
+            targets=full_data.targets[:size],
             clusters=clusters,
             shape=shape,
             embeddings=embeddings,
