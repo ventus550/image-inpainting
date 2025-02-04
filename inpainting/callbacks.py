@@ -11,10 +11,10 @@ def highlight(string):
 class OracleEstimator(TrainerCallback):
     step: int = 0
     sample_size: int = 10
+    oracle_path: str = "./mnist_oracle.keras"
 
-
-    def __init__(self, oracle_path="./mnist_oracle.keras"):
-        self.oracle = load_model(oracle_path)
+    def __post_init__(self):
+        self.oracle = load_model(self.oracle_path)
     
     def run_oracle(self, model, loader):
         same_predictions, correct = 0, 0
